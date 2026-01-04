@@ -1,7 +1,10 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using Flarial.Launcher.App;
-using ModernWpf.Controls;
+using Flarial.Launcher.UI.Controls;
+using Flarial.Launcher.UI.Theme;
+using Flarial.Launcher.UI.Animations;
 using System.Windows.Controls;
 using Flarial.Launcher.Services.SDK;
 using Flarial.Launcher.Services.Management.Versions;
@@ -11,66 +14,120 @@ using System;
 using Flarial.Launcher.Services.Client;
 using Flarial.Launcher.Services.Modding;
 using System.Windows.Threading;
-
 namespace Flarial.Launcher.UI.Pages;
 
 sealed class HomePage : Grid
 {
-    readonly Image _logo = new()
-    {
-        Source = ApplicationManifest.Icon,
-        Width = ApplicationManifest.Icon.Width / 3,
-        Height = ApplicationManifest.Icon.Height / 3,
-        VerticalAlignment = VerticalAlignment.Center,
-        Margin = new(0, 0, 0, 120)
-    };
-
-    readonly ModernWpf.Controls.ProgressBar _progressBar = new()
-    {
-        Width = ApplicationManifest.Icon.Width * 2,
-        Foreground = new SolidColorBrush(Colors.White),
-        VerticalAlignment = VerticalAlignment.Center,
-        HorizontalAlignment = HorizontalAlignment.Center,
-        Margin = new(0, 120, 0, 0),
-        Visibility = Visibility.Hidden
-    };
-
-    readonly TextBlock _textBlock = new()
-    {
-        Text = "Preparing...",
-        VerticalAlignment = VerticalAlignment.Center,
-        HorizontalAlignment = HorizontalAlignment.Center,
-        Margin = new(0, 60, 0, 0),
-        Visibility = Visibility.Hidden
-    };
-
-    readonly Button _button = new()
-    {
-        VerticalAlignment = VerticalAlignment.Center,
-        HorizontalAlignment = HorizontalAlignment.Center,
-        Content = new SymbolIcon(Symbol.Play),
-        Width = ApplicationManifest.Icon.Width * 2,
-        Margin = new(0, 120, 0, 0)
-    };
+    readonly FlarialProgressBar _progressBar;
+    readonly TextBlock _statusText;
+    readonly FlarialButton _playButton;
+    readonly FlarialCard? _bannerCard;
 
     internal HomePage(Configuration configuration, VersionCatalog catalog, Image? banner)
     {
-        Children.Add(_logo);
-        Children.Add(_progressBar);
-        Children.Add(_textBlock);
-        Children.Add(_button);
-        if (banner is { }) Children.Add(banner);
+        Background = FlarialTheme.BackgroundMediumBrush;
 
-        _button.Click += async (_, _) =>
+        var contentStack = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 100)
+        };
+
+        _statusText = new TextBlock
+        {
+            Text = "Preparing...",
+            FontSize = FlarialTheme.FontSizeMedium,
+            Foreground = FlarialTheme.TextSecondaryBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Visibility = Visibility.Hidden
+        };
+        contentStack.Children.Add(_statusText);
+
+        _progressBar = new FlarialProgressBar
+        {
+            Width = 450,
+            Margin = new Thickness(0, FlarialTheme.SpacingMd, 0, 0),
+            Visibility = Visibility.Hidden
+        };
+        contentStack.Children.Add(_progressBar);
+
+        var playContent = new Grid
+        {
+            Width = 450
+        };
+
+        var playIcon = new TextBlock
+        {
+            Text = "\uE768",
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 36,
+            Foreground = Brushes.White,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(FlarialTheme.SpacingXl, 0, 0, 0)
+        };
+        playContent.Children.Add(playIcon);
+
+        var playText = new TextBlock
+        {
+            Text = "PLAY",
+            FontSize = 28,
+            FontWeight = FontWeights.Bold,
+            Foreground = Brushes.White,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        playContent.Children.Add(playText);
+
+        _playButton = new FlarialButton
+        {
+            Content = playContent,
+            Padding = new Thickness(0, FlarialTheme.SpacingXl, 0, FlarialTheme.SpacingXl)
+        };
+        contentStack.Children.Add(_playButton);
+
+        Children.Add(contentStack);
+
+        if (banner != null)
+        {
+            banner.Stretch = Stretch.UniformToFill;
+            banner.HorizontalAlignment = HorizontalAlignment.Center;
+
+            var bannerBorder = new Border
+            {
+                CornerRadius = new CornerRadius(FlarialTheme.MediumRadius),
+                ClipToBounds = true,
+                Child = banner
+            };
+
+            _bannerCard = new FlarialCard
+            {
+                Child = bannerBorder,
+                Width = 320,
+                Height = 80,
+                Padding = new Thickness(0),
+                HasBackground = false,
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Bottom,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, FlarialTheme.SpacingXl),
+                IsClickable = true,
+                Cursor = System.Windows.Input.Cursors.Hand
+            };
+            Children.Add(_bannerCard);
+        }
+
+        _playButton.Click += async (_, _) =>
         {
             try
             {
-                _button.Visibility = Visibility.Hidden;
+                _playButton.Visibility = Visibility.Hidden;
 
                 _progressBar.IsIndeterminate = true;
                 _progressBar.Visibility = Visibility.Visible;
 
-                _textBlock.Visibility = Visibility.Visible;
+                _statusText.Visibility = Visibility.Visible;
 
                 if (!Minecraft.IsInstalled)
                 {
@@ -113,7 +170,7 @@ sealed class HomePage : Grid
                         return;
                     }
 
-                    _textBlock.Text = "Launching...";
+                    _statusText.Text = "Launching...";
 
                     if (await Task.Run(() => Injector.Launch(configuration.WaitForInitialization, library)) is null)
                     {
@@ -124,13 +181,13 @@ sealed class HomePage : Grid
                     return;
                 }
 
-                _textBlock.Text = "Verifying...";
+                _statusText.Text = "Verifying...";
 
                 if (!await client.DownloadAsync(_ => Dispatcher.Invoke(() =>
                 {
                     if (_progressBar.Value == _) return;
 
-                    _textBlock.Text = "Downloading...";
+                    _statusText.Text = "Downloading...";
 
                     _progressBar.Value = _;
                     _progressBar.IsIndeterminate = false;
@@ -140,7 +197,7 @@ sealed class HomePage : Grid
                     return;
                 }
 
-                _textBlock.Text = "Launching...";
+                _statusText.Text = "Launching...";
                 _progressBar.IsIndeterminate = true;
 
                 if (beta && await MessageDialog.ShowAsync(MessageDialogContent._betaUsage))
@@ -157,11 +214,22 @@ sealed class HomePage : Grid
                 _progressBar.IsIndeterminate = false;
                 _progressBar.Visibility = Visibility.Hidden;
 
-                _textBlock.Text = "Preparing...";
-                _textBlock.Visibility = Visibility.Hidden;
+                _statusText.Text = "Preparing...";
+                _statusText.Visibility = Visibility.Hidden;
 
-                _button.Visibility = Visibility.Visible;
+                _playButton.Visibility = Visibility.Visible;
             }
+        };
+
+        Loaded += (s, e) =>
+        {
+            _playButton.Opacity = 0;
+
+            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, FlarialTheme.NormalDuration)
+            {
+                BeginTime = TimeSpan.FromMilliseconds(100)
+            };
+            _playButton.BeginAnimation(OpacityProperty, fadeIn);
         };
     }
 }
